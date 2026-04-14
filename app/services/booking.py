@@ -11,6 +11,20 @@ from app.models import Doctor, WorkingHour, Leave, Appointment
 APP_TZ = ZoneInfo("Asia/Kolkata")
 
 
+def _naive(dt: datetime) -> datetime:
+    """Strip tzinfo so comparisons with SQLite's naive datetimes work correctly."""
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(APP_TZ).replace(tzinfo=None)
+    return dt
+
+
+def _aware(dt: datetime) -> datetime:
+    """Attach APP_TZ to a naive datetime read back from SQLite."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=APP_TZ)
+    return dt
+
+
 def get_doctors(db: Session) -> list[Doctor]:
     return db.query(Doctor).order_by(Doctor.name.asc()).all()
 
@@ -27,61 +41,69 @@ def combine_date_time(d, hhmm: str) -> datetime:
     return datetime(d.year, d.month, d.day, hh, mm, tzinfo=APP_TZ)
 
 
-def _aware(dt: datetime) -> datetime:
-    """Attach APP_TZ to a naive datetime (SQLite strips tzinfo on read-back)."""
-    if dt is None:
-        return dt
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=APP_TZ)
-    return dt
+def patient_has_conflict(
+    db: Session, patient_email: str, start_at: datetime, end_at: datetime
+) -> bool:
+    # Store and compare as naive to match what SQLite returns
+    naive_start = _naive(start_at)
+    naive_end = _naive(end_at)
+    return (
+        db.query(Appointment)
+        .filter(
+            Appointment.patient_email == patient_email.lower(),
+            Appointment.status == "confirmed",
+            Appointment.start_at < naive_end,
+            Appointment.end_at > naive_start,
+        )
+        .first()
+        is not None
+    )
 
 
-def _naive(dt: datetime) -> datetime:
-    """Strip tzinfo so SQLite string comparisons are apples-to-apples."""
-    if dt is None:
-        return dt
-    if dt.tzinfo is not None:
-        return dt.replace(tzinfo=None)
-    return dt
+def doctor_has_conflict(
+    db: Session, doctor_id: int, start_at: datetime, end_at: datetime
+) -> bool:
+    naive_start = _naive(start_at)
+    naive_end = _naive(end_at)
 
+    appt_conflict = (
+        db.query(Appointment)
+        .filter(
+            Appointment.doctor_id == doctor_id,
+            Appointment.status == "confirmed",
+            Appointment.start_at < naive_end,
+            Appointment.end_at > naive_start,
+        )
+        .first()
+        is not None
+    )
 
-def patient_has_conflict(db: Session, patient_email: str, start_at: datetime, end_at: datetime) -> bool:
-    # Compare naive values — SQLite stores datetimes without tz
-    s, e = _naive(start_at), _naive(end_at)
-    return db.query(Appointment).filter(
-        Appointment.patient_email == patient_email.lower(),
-        Appointment.status == "confirmed",
-        Appointment.start_at < e,
-        Appointment.end_at > s,
-    ).first() is not None
-
-
-def doctor_has_conflict(db: Session, doctor_id: int, start_at: datetime, end_at: datetime) -> bool:
-    s, e = _naive(start_at), _naive(end_at)
-    appt_conflict = db.query(Appointment).filter(
-        Appointment.doctor_id == doctor_id,
-        Appointment.status == "confirmed",
-        Appointment.start_at < e,
-        Appointment.end_at > s,
-    ).first() is not None
-
-    leave_conflict = db.query(Leave).filter(
-        Leave.doctor_id == doctor_id,
-        Leave.start_at < e,
-        Leave.end_at > s,
-    ).first() is not None
+    leave_conflict = (
+        db.query(Leave)
+        .filter(
+            Leave.doctor_id == doctor_id,
+            Leave.start_at < naive_end,
+            Leave.end_at > naive_start,
+        )
+        .first()
+        is not None
+    )
 
     return appt_conflict or leave_conflict
 
 
-def doctor_works_at(db: Session, doctor_id: int, start_at: datetime, end_at: datetime) -> bool:
-    start_at = _aware(start_at)
-    end_at = _aware(end_at)
+def doctor_works_at(
+    db: Session, doctor_id: int, start_at: datetime, end_at: datetime
+) -> bool:
     weekday = start_at.weekday()
-    rows = db.query(WorkingHour).filter(
-        WorkingHour.doctor_id == doctor_id,
-        WorkingHour.weekday == weekday,
-    ).all()
+    rows = (
+        db.query(WorkingHour)
+        .filter(
+            WorkingHour.doctor_id == doctor_id,
+            WorkingHour.weekday == weekday,
+        )
+        .all()
+    )
 
     for row in rows:
         window_start = datetime.combine(start_at.date(), row.start_time, tzinfo=APP_TZ)
@@ -121,10 +143,14 @@ def find_slots(
     }
 
     for doctor in doctors:
-        rows = db.query(WorkingHour).filter(
-            WorkingHour.doctor_id == doctor.id,
-            WorkingHour.weekday == requested_date.weekday(),
-        ).all()
+        rows = (
+            db.query(WorkingHour)
+            .filter(
+                WorkingHour.doctor_id == doctor.id,
+                WorkingHour.weekday == requested_date.weekday(),
+            )
+            .all()
+        )
 
         for row in rows:
             current = datetime.combine(requested_date, row.start_time, tzinfo=APP_TZ)
@@ -133,30 +159,37 @@ def find_slots(
             while current + timedelta(minutes=doctor.slot_minutes) <= window_end:
                 end_at = current + timedelta(minutes=doctor.slot_minutes)
 
-                if current < now:
+                # Skip slots in the past
+                if current <= now:
                     current += timedelta(minutes=doctor.slot_minutes)
                     continue
 
+                # Filter by exact requested time
                 if requested_time:
                     hh, mm = map(int, requested_time.split(":"))
                     if current.time() != time(hh, mm):
                         current += timedelta(minutes=doctor.slot_minutes)
                         continue
 
+                # Filter by daypart
                 if daypart:
                     start_range, end_range = daypart_ranges[daypart]
                     if not (start_range <= current.time() <= end_range):
                         current += timedelta(minutes=doctor.slot_minutes)
                         continue
 
-                if doctor_works_at(db, doctor.id, current, end_at) and not doctor_has_conflict(db, doctor.id, current, end_at):
-                    slots.append({
-                        "doctor_id": doctor.id,
-                        "doctor_name": doctor.name,
-                        "specialty": doctor.specialty,
-                        "start_at": current,
-                        "end_at": end_at,
-                    })
+                if doctor_works_at(db, doctor.id, current, end_at) and not doctor_has_conflict(
+                    db, doctor.id, current, end_at
+                ):
+                    slots.append(
+                        {
+                            "doctor_id": doctor.id,
+                            "doctor_name": doctor.name,
+                            "specialty": doctor.specialty,
+                            "start_at": current,
+                            "end_at": end_at,
+                        }
+                    )
 
                 current += timedelta(minutes=doctor.slot_minutes)
 
@@ -174,6 +207,7 @@ def create_appointment(
     start_at: datetime,
     end_at: datetime,
 ) -> Appointment:
+    # Store as naive (strip tz) to stay consistent with the rest of the DB
     appt = Appointment(
         doctor_id=doctor_id,
         patient_name=patient_name,

@@ -1,0 +1,489 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediBook — Voice Appointment Booking</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    /* ── Start Screen Overlay ── */
+    #startScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: linear-gradient(135deg, #0d1117 0%, #1e2530 60%, #111820 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 0;
+    }
+    #startScreen::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 30%, rgba(42,157,143,.22) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 70%, rgba(232,185,106,.10) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .start-inner {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+      text-align: center;
+      padding: 0 24px;
+      max-width: 520px;
+    }
+    .start-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+    .start-logo-mark {
+      font-size: 32px;
+      color: #2a9d8f;
+    }
+    .start-logo-text {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 36px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: .03em;
+    }
+    .start-tagline {
+      font-size: 17px;
+      color: rgba(255,255,255,.55);
+      line-height: 1.65;
+      max-width: 400px;
+    }
+    .start-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 4px;
+    }
+    .start-pill {
+      background: rgba(42,157,143,.15);
+      border: 1px solid rgba(42,157,143,.3);
+      color: #5ec9bf;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 7px 16px;
+      border-radius: 999px;
+    }
+    .start-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(135deg, #2a9d8f 0%, #1f7a6e 100%);
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      padding: 18px 44px;
+      font-size: 18px;
+      font-weight: 700;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      box-shadow: 0 6px 32px rgba(42,157,143,.45);
+      transition: transform .2s, box-shadow .2s;
+      margin-top: 8px;
+    }
+    .start-btn:hover {
+      transform: translateY(-3px) scale(1.03);
+      box-shadow: 0 12px 44px rgba(42,157,143,.55);
+    }
+    .start-btn svg {
+      width: 22px;
+      height: 22px;
+    }
+    .start-note {
+      font-size: 12.5px;
+      color: rgba(255,255,255,.3);
+    }
+
+    /* ── Review / Confirm Modal ── */
+    #reviewModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      background: rgba(13,17,23,.75);
+      backdrop-filter: blur(6px);
+      align-items: center;
+      justify-content: center;
+    }
+    #reviewModal.open {
+      display: flex;
+    }
+    .review-card {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 24px 80px rgba(0,0,0,.3);
+      width: 100%;
+      max-width: 480px;
+      padding: 36px 36px 32px;
+      animation: modal-in .3s cubic-bezier(.34,1.56,.64,1) both;
+    }
+    @keyframes modal-in {
+      from { opacity:0; transform: scale(.92) translateY(20px); }
+      to   { opacity:1; transform: scale(1) translateY(0); }
+    }
+    .review-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: #0d1117;
+      margin-bottom: 6px;
+    }
+    .review-sub {
+      font-size: 13.5px;
+      color: #6b7280;
+      margin-bottom: 24px;
+    }
+    .review-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .review-field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .review-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #9ca3af;
+    }
+    .review-value-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .review-input {
+      flex: 1;
+      border: 1.5px solid #ede9e2;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 15px;
+      font-family: 'DM Sans', sans-serif;
+      color: #0d1117;
+      background: #f7f4ef;
+      outline: none;
+      transition: border-color .2s, background .2s;
+    }
+    .review-input:focus {
+      border-color: #2a9d8f;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(42,157,143,.12);
+    }
+    .review-edit-btn {
+      flex-shrink: 0;
+      background: none;
+      border: 1.5px solid #ede9e2;
+      border-radius: 8px;
+      color: #4a5568;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 14px;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: border-color .2s, color .2s;
+    }
+    .review-edit-btn:hover {
+      border-color: #2a9d8f;
+      color: #2a9d8f;
+    }
+    .review-actions {
+      display: flex;
+      gap: 12px;
+    }
+    .review-cancel-btn {
+      flex: 1;
+      background: #f7f4ef;
+      border: 1.5px solid #ede9e2;
+      border-radius: 999px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      color: #4a5568;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .review-cancel-btn:hover { background: #ede9e2; }
+    .review-confirm-btn {
+      flex: 2;
+      background: linear-gradient(135deg, #2a9d8f 0%, #1f7a6e 100%);
+      border: none;
+      border-radius: 999px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: 'DM Sans', sans-serif;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(42,157,143,.35);
+      transition: transform .2s, box-shadow .2s;
+    }
+    .review-confirm-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(42,157,143,.45);
+    }
+    .review-confirm-btn:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      transform: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Start Screen ── -->
+  <div id="startScreen">
+    <div class="start-inner">
+      <div class="start-logo">
+        <span class="start-logo-mark">✦</span>
+        <span class="start-logo-text">MediBook</span>
+      </div>
+      <p class="start-tagline">
+        Your AI-powered clinic assistant. Book an appointment by simply speaking — no forms, no waiting.
+      </p>
+      <div class="start-pills">
+        <span class="start-pill">🎙️ Voice First</span>
+        <span class="start-pill">📅 Real Availability</span>
+        <span class="start-pill">✉️ Calendar Invite</span>
+        <span class="start-pill">⚡ No Login</span>
+      </div>
+      <button class="start-btn" id="startBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        Start Booking
+      </button>
+      <span class="start-note">Requires microphone access in your browser · Works best in Chrome</span>
+    </div>
+  </div>
+
+  <!-- ── Review / Confirm Modal ── -->
+  <div id="reviewModal">
+    <div class="review-card">
+      <div class="review-title">Review Your Booking</div>
+      <div class="review-sub">Please confirm or edit the details below before we finalize.</div>
+      <div class="review-fields">
+        <div class="review-field">
+          <div class="review-label">👨‍⚕️ Doctor</div>
+          <div class="review-value-row">
+            <input class="review-input" id="rv-doctor" type="text" placeholder="—" />
+          </div>
+        </div>
+        <div class="review-field">
+          <div class="review-label">📅 Date &amp; Time</div>
+          <div class="review-value-row">
+            <input class="review-input" id="rv-datetime" type="text" placeholder="—" />
+          </div>
+        </div>
+        <div class="review-field">
+          <div class="review-label">👤 Your Name</div>
+          <div class="review-value-row">
+            <input class="review-input" id="rv-name" type="text" placeholder="—" />
+          </div>
+        </div>
+        <div class="review-field">
+          <div class="review-label">✉️ Email Address</div>
+          <div class="review-value-row">
+            <input class="review-input" id="rv-email" type="email" placeholder="—" />
+          </div>
+        </div>
+      </div>
+      <div class="review-actions">
+        <button class="review-cancel-btn" id="reviewCancelBtn">← Go Back</button>
+        <button class="review-confirm-btn" id="reviewConfirmBtn">✓ Confirm Booking</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ambient background blobs -->
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+  <div class="bg-blob blob-3"></div>
+
+  <div class="layout">
+
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <span class="logo-mark">✦</span>
+        <span class="logo-text">MediBook</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-item active">
+          <span class="nav-icon">🎙️</span>
+          <span>Voice Booking</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-info">
+        <div class="info-card">
+          <div class="info-icon">🕐</div>
+          <div>
+            <div class="info-label">Clinic Hours</div>
+            <div class="info-value">Mon–Sat · 9am–6pm</div>
+          </div>
+        </div>
+        <div class="info-card">
+          <div class="info-icon">📍</div>
+          <div>
+            <div class="info-label">Location</div>
+            <div class="info-value">Chennai, Tamil Nadu</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── Main content ── -->
+    <main class="main">
+
+      <!-- Header -->
+      <header class="top-bar">
+        <div>
+          <h1 class="page-title">Book an Appointment</h1>
+          <p class="page-sub">Speak naturally — our AI assistant will handle the rest.</p>
+        </div>
+        <div class="top-badge">
+          <span class="badge-dot"></span>
+          <span>AI Active</span>
+        </div>
+      </header>
+
+      <!-- ── Voice card ── -->
+      <section class="voice-card" id="voiceCard">
+
+        <div class="vc-left">
+          <!-- Visualizer rings -->
+          <div class="ring-container" id="ringContainer">
+            <div class="ring r1"></div>
+            <div class="ring r2"></div>
+            <div class="ring r3"></div>
+            <button class="mic-btn waiting" id="talkBtn" title="Tap to speak">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="vc-state">
+            <div class="state-label" id="voiceLabel">Ready to listen</div>
+            <div class="state-hint" id="voiceHint">Tap the mic or press Space to begin</div>
+          </div>
+
+          <div class="btn-row">
+            <button class="pill-btn stop-btn" id="stopBtn" disabled>
+              <span>⏹</span> Stop
+            </button>
+          </div>
+        </div>
+
+        <div class="vc-divider"></div>
+
+        <div class="vc-right">
+          <!-- Conversation -->
+          <div class="convo-header">
+            <span class="convo-title">Conversation</span>
+            <span class="convo-badge" id="statusBadge">Idle</span>
+          </div>
+
+          <div class="convo-body" id="convoBody">
+            <!-- Populated by JS after Start is clicked -->
+          </div>
+
+          <!-- Manual fallback -->
+          <div class="fallback-row">
+            <input id="manualInput" type="text" placeholder="Can't use mic? Type here…" autocomplete="off"/>
+            <button class="send-btn" id="sendBtn" title="Send">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ── Progress tracker ── -->
+      <section class="progress-card">
+        <div class="progress-title">Booking Progress</div>
+        <div class="steps">
+          <div class="step" id="step-doctor">
+            <div class="step-icon">👨‍⚕️</div>
+            <div class="step-label">Doctor</div>
+            <div class="step-value" id="val-doctor">—</div>
+          </div>
+          <div class="step-connector"></div>
+          <div class="step" id="step-date">
+            <div class="step-icon">📅</div>
+            <div class="step-label">Date & Time</div>
+            <div class="step-value" id="val-date">—</div>
+          </div>
+          <div class="step-connector"></div>
+          <div class="step" id="step-patient">
+            <div class="step-icon">👤</div>
+            <div class="step-label">Your Name</div>
+            <div class="step-value" id="val-patient">—</div>
+          </div>
+          <div class="step-connector"></div>
+          <div class="step" id="step-email">
+            <div class="step-icon">✉️</div>
+            <div class="step-label">Email</div>
+            <div class="step-value" id="val-email">—</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Confirmed card (hidden by default) ── -->
+      <section class="confirmed-card" id="confirmedCard" style="display:none;">
+        <div class="confirmed-inner">
+          <div class="confirmed-check">✓</div>
+          <h2 class="confirmed-title">Appointment Confirmed!</h2>
+          <p class="confirmed-sub" id="confirmedMsg"></p>
+          <div class="confirmed-note">
+            📧 A calendar invite has been sent to your email.
+          </div>
+          <button class="book-another-btn" id="bookAnotherBtn">+ Book Another Appointment</button>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Hidden elements for legacy JS compatibility -->
+  <div style="display:none">
+    <span id="userText"></span>
+    <span id="botText"></span>
+    <span id="status"></span>
+    <span id="micCircle"></span>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

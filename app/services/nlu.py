@@ -8,10 +8,28 @@ from dateparser.search import search_dates
 EMAIL_RE = re.compile(r'[\w\.-]+@[\w\.-]+\.\w+')
 NAME_PATTERNS = [
     re.compile(r"\bmy name is ([a-zA-Z ]{2,60})", re.I),
-    re.compile(r"\bi am ([a-zA-Z ]{2,60})", re.I),
+    re.compile(r"\bi(?:'m| am) ([a-zA-Z ]{2,60})", re.I),
     re.compile(r"\bthis is ([a-zA-Z ]{2,60})", re.I),
+    re.compile(r"\bcall me ([a-zA-Z ]{2,60})", re.I),
+    re.compile(r"\bname['\s]*s? ([a-zA-Z ]{2,60})", re.I),
 ]
 TIME_RE = re.compile(r"\b(at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", re.I)
+
+# Words that must never be mistaken for a patient name
+_STOPWORDS = {
+    # booking-domain words
+    "yes", "no", "ok", "okay", "sure", "please", "thanks", "thank",
+    "hello", "hi", "hey",
+    "tomorrow", "today", "monday", "tuesday", "wednesday", "thursday",
+    "friday", "saturday", "sunday",
+    "morning", "afternoon", "evening", "night",
+    "appointment", "booking", "schedule", "book",
+    "doctor", "dr", "clinic",
+    "cardiology", "dermatology", "specialty",
+    "email", "mail", "confirm", "cancel",
+    "first", "second", "third", "one", "two", "three",
+    "none", "next", "other", "different", "another",
+}
 
 
 def detect_daypart(text: str) -> Optional[str]:
@@ -31,13 +49,16 @@ def normalize_spoken_email(text: str) -> str:
     # Remove common intro phrases
     intro_phrases = [
         "my email is ",
+        "my email address is ",
         "email is ",
+        "email address is ",
         "it is ",
         "it's ",
         "send it to ",
         "send to ",
         "mail id is ",
         "my mail is ",
+        "the email is ",
     ]
     for phrase in intro_phrases:
         if t.startswith(phrase):
@@ -96,13 +117,33 @@ def extract_name(text: str) -> Optional[str]:
     if "@" in text or " at " in lower or " dot " in lower:
         return None
 
-    if len(text.split()) == 1 and text.replace(" ", "").isalpha():
-        return text.title()
-
+    # Try explicit name-introduction patterns first (most reliable)
     for pattern in NAME_PATTERNS:
         m = pattern.search(text)
         if m:
-            return " ".join(m.group(1).strip().split()).title()
+            candidate = " ".join(m.group(1).strip().split()).title()
+            # Reject if it's entirely stopwords
+            words = candidate.lower().split()
+            if all(w in _STOPWORDS for w in words):
+                continue
+            return candidate
+
+    # Only accept a bare word/phrase as a name if it looks like a proper name:
+    # - 1–4 words, all alphabetic
+    # - At least one word is NOT in stopwords
+    # - Does NOT match any NLU trigger words
+    words = text.split()
+    if 1 <= len(words) <= 4 and all(w.replace("-", "").isalpha() for w in words):
+        lower_words = [w.lower() for w in words]
+        # All single-word inputs are checked against stopwords
+        if len(words) == 1 and lower_words[0] in _STOPWORDS:
+            return None
+        # For multi-word inputs, reject only if every word is a stopword
+        if len(words) > 1 and all(w in _STOPWORDS for w in lower_words):
+            return None
+        # Must start with a capital letter (proper name heuristic)
+        if words[0][0].isupper():
+            return " ".join(w.title() for w in words)
 
     return None
 
@@ -128,7 +169,9 @@ def extract_reason(text: str) -> Optional[str]:
         idx = t.find(trigger)
         if idx != -1:
             reason = text[idx + len(trigger):].strip()
-            return reason[:120]
+            # Don't return very short or stopword-only reasons
+            if len(reason) > 3:
+                return reason[:120]
     return None
 
 
@@ -178,8 +221,10 @@ def extract_doctor_or_specialty(text: str, doctors: list[dict]) -> Dict[str, Opt
         if doc["specialty"].lower() in t:
             found_specialty = doc["specialty"]
 
+        # Match last name ("Sharma", "Mehta") or first name without "Dr"
         pieces = doc["name"].lower().replace("dr ", "").split()
-        if pieces and pieces[0] in t:
-            found_doctor = doc["name"]
+        for piece in pieces:
+            if piece and piece in t:
+                found_doctor = doc["name"]
 
     return {"doctor_name": found_doctor, "specialty": found_specialty}

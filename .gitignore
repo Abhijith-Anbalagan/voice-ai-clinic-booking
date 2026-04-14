@@ -1,2 +1,30 @@
-
+# 🔐 Environment variables (VERY IMPORTANT)
 .env
+
+# 🐍 Python cache & compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 📦 Virtual environment
+venv/
+env/
+ENV/
+
+# 🗄️ SQLite database (generated locally / in Render)
+*.db
+*.sqlite3
+clinic.db
+
+# 🧪 Logs
+*.log
+
+# 🖥️ OS files
+.DS_Store
+Thumbs.db
+
+# 🧰 IDE / Editor
+.vscode/
+.idea/
+
