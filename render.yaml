@@ -2,18 +2,20 @@ services:
   - type: web
     name: medibook-voice-clinic
     runtime: python
+    pythonVersion: 3.11.9   
     buildCommand: pip install -r requirements.txt && python -m app.seed
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
     envVars:
       - key: APP_TIMEZONE
         value: Asia/Kolkata
       - key: DATABASE_URL
-        generateValue: false
         value: sqlite:///./clinic.db
       - key: EMAIL_FROM
-        sync: false          # set in Render dashboard
+        sync: false
       - key: EMAIL_PASSWORD
-        sync: false          # set in Render dashboard (Gmail App Password)
+        sync: false
+
     disk:
       name: clinic-data
       mountPath: /opt/render/project/src
