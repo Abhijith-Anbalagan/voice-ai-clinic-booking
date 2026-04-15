@@ -1,5 +1,7 @@
 # MediBook — Voice AI Clinic Booking
 
+🔗 **Live App:** https://medibook-6tml.onrender.com  
+
 A voice-first doctor appointment booking system. Speak naturally in your browser; the AI assistant converses back through audio and confirms the booking via a calendar-invite email.
 
 ---
@@ -46,20 +48,18 @@ DATABASE_URL=sqlite:///./clinic.db
 EMAIL_FROM=you@gmail.com
 EMAIL_PASSWORD=xxxx xxxx xxxx xxxx
 ```
+---
+
+# 🎥 Live Demo
+
+👉 Try it here:  
+https://medibook-6tml.onrender.com  
+
+🗣️ Example:  
+“Book a cardiology appointment tomorrow morning”
 
 ---
 
-## Render.com Deployment (Free)
-
-1. Push to GitHub.
-2. New → Web Service → connect repo.
-3. `render.yaml` is auto-detected — click **Apply**.
-4. Set `EMAIL_FROM` and `EMAIL_PASSWORD` as **secret** environment variables in the Render dashboard.
-5. Your public URL: `https://medibook-voice-clinic.onrender.com`
-
-> **Voice note:** The Web Speech API requires HTTPS. Render provides this automatically.
-
----
 
 ## Architecture
 
